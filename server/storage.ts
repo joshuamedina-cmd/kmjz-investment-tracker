@@ -1,4 +1,4 @@
-import type { Investment } from "@shared/schema";
+import type { Investment } from "../shared/schema";
 
 export interface IStorage {
   getInvestments(): Promise<Investment[]>;
