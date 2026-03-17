@@ -51,7 +51,69 @@ export async function registerRoutes(
     res.json(investments);
   });
 
-  // Get a fresh download URL for a single asset by asset ID
+  // Proxy a file from Monday.com — fetches fresh URL, then streams content with correct headers
+  app.get("/api/files/view/:assetId", async (req, res) => {
+    try {
+      const assetId = req.params.assetId;
+      const query = `{ assets(ids: [${assetId}]) { id name public_url } }`;
+      const mondayResp = await fetch("https://api.monday.com/v2", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": MONDAY_API_TOKEN,
+        },
+        body: JSON.stringify({ query }),
+      });
+      const mondayData = await mondayResp.json();
+      const asset = mondayData?.data?.assets?.[0];
+      if (!asset || !asset.public_url) {
+        return res.status(404).json({ error: "Asset not found" });
+      }
+
+      // Fetch the actual file from S3
+      const fileResp = await fetch(asset.public_url);
+      if (!fileResp.ok) {
+        return res.status(502).json({ error: "Failed to fetch file from storage" });
+      }
+
+      // Determine content type from file name
+      const name = (asset.name || "").toLowerCase();
+      let contentType = "application/octet-stream";
+      if (name.endsWith(".pdf")) contentType = "application/pdf";
+      else if (name.endsWith(".jpg") || name.endsWith(".jpeg")) contentType = "image/jpeg";
+      else if (name.endsWith(".png")) contentType = "image/png";
+      else if (name.endsWith(".gif")) contentType = "image/gif";
+      else if (name.endsWith(".webp")) contentType = "image/webp";
+
+      // Stream back with inline disposition so browser opens it
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Content-Disposition", `inline; filename="${asset.name}"`);
+      if (fileResp.headers.get("content-length")) {
+        res.setHeader("Content-Length", fileResp.headers.get("content-length")!);
+      }
+
+      // Pipe the response
+      const reader = fileResp.body?.getReader();
+      if (!reader) {
+        return res.status(502).json({ error: "No response body" });
+      }
+      const pump = async () => {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) { res.end(); break; }
+          res.write(Buffer.from(value));
+        }
+      };
+      await pump();
+    } catch (err: any) {
+      console.error("Failed to proxy file from Monday.com:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to fetch file" });
+      }
+    }
+  });
+
+  // Get a fresh download URL for a single asset by asset ID (JSON response)
   app.get("/api/files/download/:assetId", async (req, res) => {
     try {
       const assetId = req.params.assetId;

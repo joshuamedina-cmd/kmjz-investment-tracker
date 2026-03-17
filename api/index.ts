@@ -413,7 +413,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const url = req.url || "";
 
-  // GET /api/files/download/:assetId — fetch a fresh URL for a single asset
+  // GET /api/files/view/:assetId — proxy the file with correct content-type for browser viewing
+  const viewMatch = url.match(/\/files\/view\/(\d+)/);
+  if (req.method === "GET" && viewMatch) {
+    try {
+      const assetId = viewMatch[1];
+      const query = `{ assets(ids: [${assetId}]) { id name public_url } }`;
+      const mondayResp = await fetch("https://api.monday.com/v2", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": MONDAY_API_TOKEN,
+        },
+        body: JSON.stringify({ query }),
+      });
+      const mondayData = await mondayResp.json();
+      const asset = mondayData?.data?.assets?.[0];
+      if (!asset || !asset.public_url) {
+        return res.status(404).json({ error: "Asset not found" });
+      }
+
+      // Fetch the actual file from S3
+      const fileResp = await fetch(asset.public_url);
+      if (!fileResp.ok) {
+        return res.status(502).json({ error: "Failed to fetch file from storage" });
+      }
+
+      // Determine content type from file name
+      const name = (asset.name || "").toLowerCase();
+      let contentType = "application/octet-stream";
+      if (name.endsWith(".pdf")) contentType = "application/pdf";
+      else if (name.endsWith(".jpg") || name.endsWith(".jpeg")) contentType = "image/jpeg";
+      else if (name.endsWith(".png")) contentType = "image/png";
+      else if (name.endsWith(".gif")) contentType = "image/gif";
+      else if (name.endsWith(".webp")) contentType = "image/webp";
+
+      // Get file as buffer
+      const arrayBuf = await fileResp.arrayBuffer();
+      const buffer = Buffer.from(arrayBuf);
+
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Content-Disposition", `inline; filename="${asset.name}"`);
+      res.setHeader("Content-Length", buffer.length.toString());
+      return res.status(200).send(buffer);
+    } catch (err: any) {
+      return res.status(500).json({ error: "Failed to fetch file" });
+    }
+  }
+
+  // GET /api/files/download/:assetId — fetch a fresh URL for a single asset (JSON)
   const downloadMatch = url.match(/\/files\/download\/(\d+)/);
   if (req.method === "GET" && downloadMatch) {
     try {

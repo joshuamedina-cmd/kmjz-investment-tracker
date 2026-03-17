@@ -52,7 +52,13 @@ function formatDate(dateStr: string): string {
   });
 }
 
-// Fetch a fresh signed URL from Monday.com for a specific asset
+// Build the proxy URL that streams the file through our server
+const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
+function getViewUrl(assetId: number): string {
+  return `${API_BASE}/api/files/view/${assetId}`;
+}
+
+// Fetch a fresh signed URL from Monday.com for a specific asset (for download)
 async function getFreshUrl(assetId: number): Promise<string> {
   const res = await apiRequest("GET", `/api/files/download/${assetId}`);
   const data = await res.json();
@@ -103,17 +109,10 @@ function FilePreviewModal({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  // Fetch fresh URL on mount
+  // Use proxy URL directly - no async fetch needed
   useEffect(() => {
-    getFreshUrl(file.assetId)
-      .then((url) => {
-        setFreshUrl(url);
-        setLoading(false);
-      })
-      .catch(() => {
-        setError(true);
-        setLoading(false);
-      });
+    setFreshUrl(getViewUrl(file.assetId));
+    setLoading(false);
   }, [file.assetId]);
 
   const isImage =
@@ -121,13 +120,8 @@ function FilePreviewModal({
     file.name.toLowerCase().endsWith(".png") ||
     file.name.toLowerCase().endsWith(".jpeg");
 
-  const handleOpen = async () => {
-    try {
-      const url = await getFreshUrl(file.assetId);
-      window.open(url, "_blank");
-    } catch {
-      // fallback
-    }
+  const handleOpen = () => {
+    window.open(getViewUrl(file.assetId), "_blank");
   };
 
   return (
@@ -198,8 +192,8 @@ function FilePreviewModal({
   );
 }
 
-// Button that fetches a fresh URL then performs an action
-function FreshUrlButton({
+// Button that opens file view or triggers download
+function FileActionButton({
   assetId,
   action,
   className,
@@ -216,13 +210,14 @@ function FreshUrlButton({
   const { toast } = useToast();
 
   const handleClick = async () => {
-    setLoading(true);
-    try {
-      const url = await getFreshUrl(assetId);
-      if (action === "open") {
-        window.open(url, "_blank");
-      } else {
-        // Download: create a temporary link and click it
+    if (action === "open") {
+      // Open proxy URL directly in new tab - no async needed
+      window.open(getViewUrl(assetId), "_blank");
+    } else {
+      // Download: fetch fresh S3 URL (has attachment disposition)
+      setLoading(true);
+      try {
+        const url = await getFreshUrl(assetId);
         const a = document.createElement("a");
         a.href = url;
         a.target = "_blank";
@@ -230,15 +225,15 @@ function FreshUrlButton({
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+      } catch {
+        toast({
+          title: "Failed to get file",
+          description: "Could not fetch a fresh download link. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
       }
-    } catch {
-      toast({
-        title: "Failed to get file",
-        description: "Could not fetch a fresh download link. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -478,7 +473,7 @@ export default function FilesPage() {
                               Preview
                             </button>
                           )}
-                          <FreshUrlButton
+                          <FileActionButton
                             assetId={file.assetId}
                             action="open"
                             className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
@@ -486,8 +481,8 @@ export default function FilesPage() {
                           >
                             <ExternalLink className="w-3 h-3" />
                             Open
-                          </FreshUrlButton>
-                          <FreshUrlButton
+                          </FileActionButton>
+                          <FileActionButton
                             assetId={file.assetId}
                             action="download"
                             className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
@@ -495,7 +490,7 @@ export default function FilesPage() {
                           >
                             <Download className="w-3 h-3" />
                             Download
-                          </FreshUrlButton>
+                          </FileActionButton>
                         </div>
                       </div>
                     );
