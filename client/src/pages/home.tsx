@@ -2,6 +2,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Investment } from "@shared/schema";
 import { useState } from "react";
+import { Link } from "wouter";
 import {
   ArrowLeft,
   ArrowRight,
@@ -12,6 +13,7 @@ import {
   DollarSign,
   X,
   ExternalLink,
+  FolderOpen,
 } from "lucide-react";
 
 const TOTAL_INVESTMENT = 2_000_000;
@@ -430,19 +432,29 @@ export default function Home() {
                 <p className="text-xs text-gray-500">Investment Tracker</p>
               </div>
             </div>
-            {remaining > 0 && (
-              <div className="text-right">
-                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium">
-                  Outstanding Balance
-                </p>
-                <p
-                  className="text-xl font-bold text-red-600 tabular-nums leading-tight"
-                  data-testid="remaining-amount"
-                >
-                  {formatCurrency(remaining)}
-                </p>
-              </div>
-            )}
+            <div className="flex items-center gap-4">
+              <Link
+                href="/files"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                data-testid="go-to-files"
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                Documents
+              </Link>
+              {remaining > 0 && (
+                <div className="text-right">
+                  <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium">
+                    Outstanding Balance
+                  </p>
+                  <p
+                    className="text-xl font-bold text-red-600 tabular-nums leading-tight"
+                    data-testid="remaining-amount"
+                  >
+                    {formatCurrency(remaining)}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>

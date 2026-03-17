@@ -385,6 +385,23 @@ function assignInvestment(investmentId: string, assignTo: "Grant" | "Haythem"): 
   return inv;
 }
 
+const MONDAY_API_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJ0aWQiOjYyNzA3NzcxOSwiYWFpIjoxMSwidWlkIjo3NTA2NTY3OCwiaWFkIjoiMjAyNi0wMi0yOFQwMToxNzowOS4wMDBaIiwicGVyIjoibWU6d3JpdGUiLCJhY3RpZCI6MjkxNDg2NzMsInJnbiI6InVzZTEifQ.ocD9w0Q-17JqNfU4iZXL4i3frn_Bw4pyVe_fkhJuiPg";
+const MONDAY_BOARD_ID = "18401448749";
+
+async function fetchFreshFilesFromMonday(): Promise<any[]> {
+  const query = `{ boards(ids: [${MONDAY_BOARD_ID}]) { items_page(limit: 50) { items { id name assets { id name public_url } } } } }`;
+  const resp = await fetch("https://api.monday.com/v2", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": MONDAY_API_TOKEN,
+    },
+    body: JSON.stringify({ query }),
+  });
+  const data = await resp.json();
+  return data?.data?.boards?.[0]?.items_page?.items || [];
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -395,6 +412,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const url = req.url || "";
+
+  // GET /api/files — fresh file URLs from Monday.com
+  if (req.method === "GET" && url.includes("/files")) {
+    try {
+      const mondayItems = await fetchFreshFilesFromMonday();
+      const allInvestments = getInvestments();
+
+      const mondayFileMap: Record<string, any[]> = {};
+      for (const item of mondayItems) {
+        mondayFileMap[item.id] = item.assets || [];
+      }
+
+      const result = allInvestments.map((inv) => ({
+        id: inv.id,
+        name: inv.name,
+        investor: inv.investor,
+        amount: inv.amount,
+        date: inv.date,
+        method: inv.method,
+        verified: inv.verified,
+        files: (mondayFileMap[inv.id] || []).map((a: any) => ({
+          assetId: parseInt(a.id),
+          name: a.name,
+          url: a.public_url,
+        })),
+      }));
+
+      return res.status(200).json(result);
+    } catch (err: any) {
+      return res.status(500).json({ error: "Failed to fetch files from Monday.com" });
+    }
+  }
 
   // GET /api/investments
   if (req.method === "GET" && url.includes("/investments")) {
