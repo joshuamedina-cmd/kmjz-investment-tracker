@@ -56,6 +56,13 @@ function MethodBadge({ method }: { method: string }) {
   );
 }
 
+// Build a vault path from an assetId and filename
+function getVaultPath(assetId: number | null, name: string): string {
+  if (!assetId) return "";
+  const safeName = name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return `/vault/${assetId}_${safeName}`;
+}
+
 function FilesModal({
   investment,
   onClose,
@@ -63,7 +70,7 @@ function FilesModal({
   investment: Investment;
   onClose: () => void;
 }) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<{ name: string; path: string } | null>(null);
 
   return (
     <div
@@ -71,90 +78,97 @@ function FilesModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full mx-4 max-h-[85vh] overflow-y-auto"
+        className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-gray-900">
-            Documents — {investment.name}
-          </h3>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
+          <div>
+            <h3 className="text-base font-bold text-gray-900">
+              Documents — {investment.name}
+            </h3>
+            <p className="text-sm text-gray-500 mt-0.5">
+              {formatCurrency(investment.amount)} · {formatDate(investment.date)} · {investment.method}
+            </p>
+          </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg hover:bg-gray-100 transition-colors"
+            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
             data-testid="close-files-modal"
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
-        <p className="text-sm text-gray-500 mb-4">
-          {formatCurrency(investment.amount)} · {formatDate(investment.date)} ·{" "}
-          {investment.method}
-        </p>
 
-        {/* Image preview */}
-        {previewUrl && (
-          <div className="mb-4 rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
-            <div className="flex items-center justify-between px-3 py-2 bg-gray-100 border-b border-gray-200">
-              <span className="text-xs text-gray-500 font-medium">Preview</span>
-              <button
-                onClick={() => setPreviewUrl(null)}
-                className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                Close preview
-              </button>
-            </div>
-            <img
-              src={previewUrl}
-              alt="File preview"
-              className="w-full max-h-80 object-contain p-2"
-            />
-          </div>
-        )}
-
-        {investment.files.length === 0 ? (
-          <p className="text-gray-400 text-sm italic py-4 text-center">
-            No documents attached
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {investment.files.map((file, idx) => {
-              const isImage =
-                file.name.toLowerCase().endsWith(".jpg") ||
-                file.name.toLowerCase().endsWith(".png") ||
-                file.name.toLowerCase().endsWith(".jpeg");
-              const isPdf = file.name.toLowerCase().endsWith(".pdf");
-              const hasUrl = file.url && file.url.length > 0;
-
-              return (
-                <li
-                  key={idx}
-                  className="rounded-xl bg-gray-50 border border-gray-100 overflow-hidden"
+        <div className="flex-1 overflow-y-auto">
+          {/* Inline preview */}
+          {previewFile && (
+            <div className="border-b border-gray-100 bg-gray-50">
+              <div className="flex items-center justify-between px-4 py-2 bg-gray-100">
+                <span className="text-xs text-gray-600 font-medium truncate">{previewFile.name}</span>
+                <button
+                  onClick={() => setPreviewFile(null)}
+                  className="text-xs text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 ml-2"
                 >
-                  <div className="flex items-center gap-3 px-3 py-2.5">
-                    {isImage ? (
-                      <Image className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                    ) : (
-                      <FileText className="w-4 h-4 text-red-500 flex-shrink-0" />
-                    )}
-                    <span className="text-sm text-gray-700 truncate flex-1">
+                  Close preview
+                </button>
+              </div>
+              {previewFile.name.toLowerCase().endsWith(".pdf") ? (
+                <iframe src={previewFile.path} className="w-full h-[50vh]" title={previewFile.name} />
+              ) : (
+                <div className="flex items-center justify-center p-4">
+                  <img src={previewFile.path} alt={previewFile.name} className="max-w-full max-h-[50vh] object-contain rounded-lg" />
+                </div>
+              )}
+            </div>
+          )}
+
+          {investment.files.length === 0 ? (
+            <p className="text-gray-400 text-sm italic py-8 text-center">
+              No documents attached
+            </p>
+          ) : (
+            <ul className="divide-y divide-gray-50">
+              {investment.files.map((file, idx) => {
+                const isImage =
+                  file.name.toLowerCase().endsWith(".jpg") ||
+                  file.name.toLowerCase().endsWith(".png") ||
+                  file.name.toLowerCase().endsWith(".jpeg");
+                const vaultPath = getVaultPath(file.assetId, file.name);
+                const hasVaultFile = !!vaultPath;
+
+                return (
+                  <li
+                    key={idx}
+                    className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50/80 transition-colors group"
+                  >
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      isImage ? "bg-sky-50 text-sky-500" : "bg-red-50 text-red-500"
+                    }`}>
+                      {isImage ? <Image className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+                    </div>
+                    <span className="text-sm text-gray-700 truncate flex-1 min-w-0">
                       {file.name}
                     </span>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
-                      {isImage && hasUrl && (
+                      {hasVaultFile && (
                         <button
-                          onClick={() => setPreviewUrl(previewUrl === file.url ? null : file.url)}
-                          className="px-2 py-1 text-[11px] font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
+                          onClick={() =>
+                            setPreviewFile(
+                              previewFile?.path === vaultPath ? null : { name: file.name, path: vaultPath }
+                            )
+                          }
+                          className="px-2.5 py-1 text-[11px] font-medium text-sky-600 bg-sky-50 rounded-lg hover:bg-sky-100 transition-colors"
                           data-testid={`preview-file-${idx}`}
                         >
-                          {previewUrl === file.url ? "Hide" : "Preview"}
+                          {previewFile?.path === vaultPath ? "Hide" : "Preview"}
                         </button>
                       )}
-                      {hasUrl && (
+                      {hasVaultFile && (
                         <a
-                          href={file.url}
+                          href={vaultPath}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-white bg-gray-800 rounded-md hover:bg-gray-700 transition-colors"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-white bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
                           onClick={(e) => e.stopPropagation()}
                           data-testid={`open-file-${idx}`}
                         >
@@ -162,18 +176,16 @@ function FilesModal({
                           Open
                         </a>
                       )}
-                      {!hasUrl && (
-                        <span className="text-[11px] text-gray-400 italic">
-                          No link
-                        </span>
+                      {!hasVaultFile && (
+                        <span className="text-[11px] text-gray-400 italic">No file</span>
                       )}
                     </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -225,22 +237,25 @@ function InvestmentCard({
         )}
         {/* Assignment arrows */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onAssign(investment.id, "Grant");
-            }}
-            disabled={isPending}
-            className={`p-1.5 rounded-lg transition-all ${
-              assignedGrant
-                ? "bg-sky-500 text-white shadow-sm"
-                : "bg-gray-100 text-gray-400 hover:bg-sky-100 hover:text-sky-600"
-            }`}
-            data-testid={`assign-grant-${investment.id}`}
-            title="Assign to Grant"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onAssign(investment.id, "Grant");
+              }}
+              disabled={isPending}
+              className={`p-1.5 rounded-lg transition-all ${
+                assignedGrant
+                  ? "bg-sky-500 text-white shadow-sm"
+                  : "bg-gray-100 text-gray-400 hover:bg-sky-100 hover:text-sky-600"
+              }`}
+              data-testid={`assign-grant-${investment.id}`}
+              title="Assign to Grant"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+            </button>
+            <span className="text-[10px] font-semibold text-sky-600">Grant</span>
+          </div>
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
@@ -260,9 +275,6 @@ function InvestmentCard({
               <span className="text-xs text-gray-500">
                 {formatDate(investment.date)}
               </span>
-              <span className={`text-xs font-medium ${investment.investor === 'Grant' ? 'text-sky-500' : 'text-amber-500'}`}>
-                {investment.investor}
-              </span>
             </div>
             {investment.files.length > 0 && (
               <div className="flex items-center gap-1 mt-1.5">
@@ -275,22 +287,25 @@ function InvestmentCard({
             )}
           </div>
 
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onAssign(investment.id, "Haythem");
-            }}
-            disabled={isPending}
-            className={`p-1.5 rounded-lg transition-all ${
-              assignedHaythem
-                ? "bg-amber-500 text-white shadow-sm"
-                : "bg-gray-100 text-gray-400 hover:bg-amber-100 hover:text-amber-600"
-            }`}
-            data-testid={`assign-haythem-${investment.id}`}
-            title="Assign to Haythem"
-          >
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onAssign(investment.id, "Haythem");
+              }}
+              disabled={isPending}
+              className={`p-1.5 rounded-lg transition-all ${
+                assignedHaythem
+                  ? "bg-amber-500 text-white shadow-sm"
+                  : "bg-gray-100 text-gray-400 hover:bg-amber-100 hover:text-amber-600"
+              }`}
+              data-testid={`assign-haythem-${investment.id}`}
+              title="Assign to Haythem"
+            >
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <span className="text-[10px] font-semibold text-amber-600">Haythem</span>
+          </div>
         </div>
       </div>
 
