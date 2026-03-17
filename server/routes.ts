@@ -51,6 +51,31 @@ export async function registerRoutes(
     res.json(investments);
   });
 
+  // Get a fresh download URL for a single asset by asset ID
+  app.get("/api/files/download/:assetId", async (req, res) => {
+    try {
+      const assetId = req.params.assetId;
+      const query = `{ assets(ids: [${assetId}]) { id name public_url } }`;
+      const resp = await fetch("https://api.monday.com/v2", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": MONDAY_API_TOKEN,
+        },
+        body: JSON.stringify({ query }),
+      });
+      const data = await resp.json();
+      const asset = data?.data?.assets?.[0];
+      if (!asset || !asset.public_url) {
+        return res.status(404).json({ error: "Asset not found" });
+      }
+      res.json({ url: asset.public_url, name: asset.name });
+    } catch (err: any) {
+      console.error("Failed to fetch asset from Monday.com:", err);
+      res.status(500).json({ error: "Failed to fetch file" });
+    }
+  });
+
   // Get fresh file URLs from Monday.com API
   app.get("/api/files", async (_req, res) => {
     try {

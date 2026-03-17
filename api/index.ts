@@ -413,6 +413,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const url = req.url || "";
 
+  // GET /api/files/download/:assetId — fetch a fresh URL for a single asset
+  const downloadMatch = url.match(/\/files\/download\/(\d+)/);
+  if (req.method === "GET" && downloadMatch) {
+    try {
+      const assetId = downloadMatch[1];
+      const query = `{ assets(ids: [${assetId}]) { id name public_url } }`;
+      const resp = await fetch("https://api.monday.com/v2", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": MONDAY_API_TOKEN,
+        },
+        body: JSON.stringify({ query }),
+      });
+      const data = await resp.json();
+      const asset = data?.data?.assets?.[0];
+      if (!asset || !asset.public_url) {
+        return res.status(404).json({ error: "Asset not found" });
+      }
+      return res.status(200).json({ url: asset.public_url, name: asset.name });
+    } catch (err: any) {
+      return res.status(500).json({ error: "Failed to fetch file" });
+    }
+  }
+
   // GET /api/files — fresh file URLs from Monday.com
   if (req.method === "GET" && url.includes("/files")) {
     try {

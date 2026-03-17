@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
+import { useToast } from "@/hooks/use-toast";
 import {
   FileText,
   Image,
@@ -10,7 +11,6 @@ import {
   ArrowLeft,
   Loader2,
   Search,
-  Filter,
   FolderOpen,
   Eye,
   X,
@@ -52,6 +52,14 @@ function formatDate(dateStr: string): string {
   });
 }
 
+// Fetch a fresh signed URL from Monday.com for a specific asset
+async function getFreshUrl(assetId: number): Promise<string> {
+  const res = await apiRequest("GET", `/api/files/download/${assetId}`);
+  const data = await res.json();
+  if (!data.url) throw new Error("No URL returned");
+  return data.url;
+}
+
 function MethodBadge({ method }: { method: string }) {
   const colors: Record<string, string> = {
     CASH: "bg-emerald-100 text-emerald-800",
@@ -91,10 +99,36 @@ function FilePreviewModal({
   file: FileItem;
   onClose: () => void;
 }) {
+  const [freshUrl, setFreshUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  // Fetch fresh URL on mount
+  useEffect(() => {
+    getFreshUrl(file.assetId)
+      .then((url) => {
+        setFreshUrl(url);
+        setLoading(false);
+      })
+      .catch(() => {
+        setError(true);
+        setLoading(false);
+      });
+  }, [file.assetId]);
+
   const isImage =
     file.name.toLowerCase().endsWith(".jpg") ||
     file.name.toLowerCase().endsWith(".png") ||
     file.name.toLowerCase().endsWith(".jpeg");
+
+  const handleOpen = async () => {
+    try {
+      const url = await getFreshUrl(file.assetId);
+      window.open(url, "_blank");
+    } catch {
+      // fallback
+    }
+  };
 
   return (
     <div
@@ -110,16 +144,14 @@ function FilePreviewModal({
             {file.name}
           </h3>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <a
-              href={file.url}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={handleOpen}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               data-testid="modal-open-file"
             >
               <ExternalLink className="w-3.5 h-3.5" />
               Open
-            </a>
+            </button>
             <button
               onClick={onClose}
               className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
@@ -130,9 +162,18 @@ function FilePreviewModal({
           </div>
         </div>
         <div className="flex-1 overflow-auto bg-gray-50 flex items-center justify-center p-4 min-h-[300px]">
-          {isImage ? (
+          {loading ? (
+            <div className="text-center">
+              <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-3" />
+              <p className="text-sm text-gray-500">Loading preview...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center">
+              <p className="text-sm text-red-500">Failed to load preview</p>
+            </div>
+          ) : isImage && freshUrl ? (
             <img
-              src={file.url}
+              src={freshUrl}
               alt={file.name}
               className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-sm"
             />
@@ -142,20 +183,78 @@ function FilePreviewModal({
               <p className="text-sm text-gray-500 mb-3">
                 PDF and document previews open in a new tab
               </p>
-              <a
-                href={file.url}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={handleOpen}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
               >
                 <ExternalLink className="w-4 h-4" />
                 Open in New Tab
-              </a>
+              </button>
             </div>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+// Button that fetches a fresh URL then performs an action
+function FreshUrlButton({
+  assetId,
+  action,
+  className,
+  children,
+  "data-testid": testId,
+}: {
+  assetId: number;
+  action: "open" | "download";
+  className: string;
+  children: React.ReactNode;
+  "data-testid"?: string;
+}) {
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+
+  const handleClick = async () => {
+    setLoading(true);
+    try {
+      const url = await getFreshUrl(assetId);
+      if (action === "open") {
+        window.open(url, "_blank");
+      } else {
+        // Download: create a temporary link and click it
+        const a = document.createElement("a");
+        a.href = url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    } catch {
+      toast({
+        title: "Failed to get file",
+        description: "Could not fetch a fresh download link. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={loading}
+      className={className}
+      data-testid={testId}
+    >
+      {loading ? (
+        <Loader2 className="w-3 h-3 animate-spin" />
+      ) : (
+        children
+      )}
+    </button>
   );
 }
 
@@ -170,7 +269,7 @@ export default function FilesPage() {
       const res = await apiRequest("GET", "/api/files");
       return res.json();
     },
-    staleTime: 0, // Always fetch fresh URLs
+    staleTime: 0,
   });
 
   const filtered = (investments || []).filter((inv) => {
@@ -379,25 +478,24 @@ export default function FilesPage() {
                               Preview
                             </button>
                           )}
-                          <a
-                            href={file.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                          <FreshUrlButton
+                            assetId={file.assetId}
+                            action="open"
+                            className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
                             data-testid={`open-${inv.id}-${idx}`}
                           >
                             <ExternalLink className="w-3 h-3" />
                             Open
-                          </a>
-                          <a
-                            href={file.url}
-                            download={file.name}
-                            className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                          </FreshUrlButton>
+                          <FreshUrlButton
+                            assetId={file.assetId}
+                            action="download"
+                            className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
                             data-testid={`download-${inv.id}-${idx}`}
                           >
                             <Download className="w-3 h-3" />
                             Download
-                          </a>
+                          </FreshUrlButton>
                         </div>
                       </div>
                     );
@@ -413,7 +511,7 @@ export default function FilesPage() {
       <footer className="border-t border-gray-100 bg-gray-50/50 py-4">
         <div className="max-w-6xl mx-auto px-4 flex items-center justify-between">
           <p className="text-[11px] text-gray-400">
-            Files are fetched live from Monday.com with 1-hour download links
+            Files are fetched live from Monday.com — fresh download link on every click
           </p>
           <a
             href="https://www.perplexity.ai/computer"
