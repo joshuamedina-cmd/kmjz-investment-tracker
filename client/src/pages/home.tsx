@@ -14,6 +14,7 @@ import {
   X,
   ExternalLink,
   FolderOpen,
+  Shield,
 } from "lucide-react";
 
 const TOTAL_INVESTMENT = 2_000_000;
@@ -440,6 +441,14 @@ export default function Home() {
               >
                 <FolderOpen className="w-3.5 h-3.5" />
                 Documents
+              </Link>
+              <Link
+                href="/vault"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-emerald-600 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
+                data-testid="go-to-vault"
+              >
+                <Shield className="w-3.5 h-3.5" />
+                Vault
               </Link>
               {remaining > 0 && (
                 <div className="text-right">
