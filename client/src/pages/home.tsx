@@ -1,632 +1,216 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { Investment } from "@shared/schema";
 import { useState } from "react";
-import { Link } from "wouter";
+import { AlertTriangle, CheckCircle2, ChevronRight, Landmark, ShieldCheck, X } from "lucide-react";
 import {
-  ArrowLeft,
-  ArrowRight,
-  FileText,
-  Image,
-  CheckCircle2,
-  AlertTriangle,
-  DollarSign,
-  X,
-  ExternalLink,
-  FolderOpen,
-  Shield,
-} from "lucide-react";
+  STARTING_CAPITAL,
+  LAST_RECONCILED_BALANCE,
+  CURRENT_REPORTED_BALANCE,
+  CURRENT_RECONCILIATION_GAP,
+  KNOWN_NET_REDUCTION,
+  RMLLC_FUNDED,
+  RMLLC_ACCOUNTED,
+  RMLLC_PENDING_TOTAL,
+  RMLLC_PENDING_CAPTURED,
+  RMLLC_UNALLOCATED,
+  OLD_TEAM_TOTAL,
+  OLD_TEAM_DIRECT,
+  OLD_TEAM_RMLLC,
+  CONSOLIDATED_FEES,
+  mainUses,
+  oldTeamByPerson,
+  oldTeamTransactions,
+  rmllcTransactions,
+  rmllcPendingTransactions,
+  recoverableItems,
+  type ReportKey,
+  type TransactionRow,
+} from "@/data/capital-dashboard";
 
-const TOTAL_INVESTMENT = 2_000_000;
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
+function money(value: number, approximate = false) {
+  const formatted = new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
     maximumFractionDigits: 2,
-  }).format(amount);
+  }).format(value);
+  return approximate ? `~${formatted}` : formatted;
 }
 
-function formatDate(dateStr: string): string {
-  if (!dateStr) return "";
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function MethodBadge({ method }: { method: string }) {
-  const colors: Record<string, string> = {
-    CASH: "bg-emerald-100 text-emerald-800",
-    WIRE: "bg-blue-100 text-blue-800",
-    CARD: "bg-purple-100 text-purple-800",
-    CHECK: "bg-amber-100 text-amber-800",
-    "MONEY ORDER": "bg-orange-100 text-orange-800",
-    "APPLE PAY": "bg-gray-100 text-gray-800",
+function Card({ label, value, detail, onClick, tone = "white" }: {
+  label: string;
+  value: string;
+  detail: string;
+  onClick?: () => void;
+  tone?: "white" | "green" | "blue" | "amber";
+}) {
+  const tones = {
+    white: "bg-white border-slate-200",
+    green: "bg-emerald-50 border-emerald-200",
+    blue: "bg-sky-50 border-sky-200",
+    amber: "bg-amber-50 border-amber-200",
   };
-  return (
-    <span
-      className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold tracking-wide uppercase ${colors[method] || "bg-gray-100 text-gray-700"}`}
-    >
-      {method}
-    </span>
-  );
-}
-
-// Build a vault path from an assetId and filename
-function getVaultPath(assetId: number | null, name: string): string {
-  if (!assetId) return "";
-  const safeName = name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  return `/vault/${assetId}_${safeName}`;
-}
-
-function FilesModal({
-  investment,
-  onClose,
-}: {
-  investment: Investment;
-  onClose: () => void;
-}) {
-  const [previewFile, setPreviewFile] = useState<{ name: string; path: string } | null>(null);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
-          <div>
-            <h3 className="text-base font-bold text-gray-900">
-              Documents — {investment.name}
-            </h3>
-            <p className="text-sm text-gray-500 mt-0.5">
-              {formatCurrency(investment.amount)} · {formatDate(investment.date)} · {investment.method}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-            data-testid="close-files-modal"
-          >
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {/* Inline preview */}
-          {previewFile && (
-            <div className="border-b border-gray-100 bg-gray-50">
-              <div className="flex items-center justify-between px-4 py-2 bg-gray-100">
-                <span className="text-xs text-gray-600 font-medium truncate">{previewFile.name}</span>
-                <button
-                  onClick={() => setPreviewFile(null)}
-                  className="text-xs text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 ml-2"
-                >
-                  Close preview
-                </button>
-              </div>
-              {previewFile.name.toLowerCase().endsWith(".pdf") ? (
-                <iframe src={previewFile.path} className="w-full h-[50vh]" title={previewFile.name} />
-              ) : (
-                <div className="flex items-center justify-center p-4">
-                  <img src={previewFile.path} alt={previewFile.name} className="max-w-full max-h-[50vh] object-contain rounded-lg" />
-                </div>
-              )}
-            </div>
-          )}
-
-          {investment.files.length === 0 ? (
-            <p className="text-gray-400 text-sm italic py-8 text-center">
-              No documents attached
-            </p>
-          ) : (
-            <ul className="divide-y divide-gray-50">
-              {investment.files.map((file, idx) => {
-                const isImage =
-                  file.name.toLowerCase().endsWith(".jpg") ||
-                  file.name.toLowerCase().endsWith(".png") ||
-                  file.name.toLowerCase().endsWith(".jpeg");
-                const vaultPath = getVaultPath(file.assetId, file.name);
-                const hasVaultFile = !!vaultPath;
-
-                return (
-                  <li
-                    key={idx}
-                    className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50/80 transition-colors group"
-                  >
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      isImage ? "bg-sky-50 text-sky-500" : "bg-red-50 text-red-500"
-                    }`}>
-                      {isImage ? <Image className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
-                    </div>
-                    <span className="text-sm text-gray-700 truncate flex-1 min-w-0">
-                      {file.name}
-                    </span>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      {hasVaultFile && (
-                        <button
-                          onClick={() =>
-                            setPreviewFile(
-                              previewFile?.path === vaultPath ? null : { name: file.name, path: vaultPath }
-                            )
-                          }
-                          className="px-2.5 py-1 text-[11px] font-medium text-sky-600 bg-sky-50 rounded-lg hover:bg-sky-100 transition-colors"
-                          data-testid={`preview-file-${idx}`}
-                        >
-                          {previewFile?.path === vaultPath ? "Hide" : "Preview"}
-                        </button>
-                      )}
-                      {hasVaultFile && (
-                        <a
-                          href={vaultPath}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-white bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
-                          onClick={(e) => e.stopPropagation()}
-                          data-testid={`open-file-${idx}`}
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          Open
-                        </a>
-                      )}
-                      {!hasVaultFile && (
-                        <span className="text-[11px] text-gray-400 italic">No file</span>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function InvestmentCard({
-  investment,
-  onAssign,
-  isPending,
-  wasDisputed,
-}: {
-  investment: Investment;
-  onAssign: (id: string, assignTo: "Grant" | "Haythem") => void;
-  isPending: boolean;
-  wasDisputed: boolean;
-}) {
-  const [showFiles, setShowFiles] = useState(false);
-
-  const assignedGrant = investment.assignedTo === "Grant";
-  const assignedHaythem = investment.assignedTo === "Haythem";
-
-  // Card position offset for animation
-  let translateX = "translate-x-0";
-  if (assignedGrant) translateX = "-translate-x-4 md:-translate-x-8";
-  if (assignedHaythem) translateX = "translate-x-4 md:translate-x-8";
-
-  let borderColor = "border-gray-200";
-  if (assignedGrant) borderColor = "border-sky-300";
-  if (assignedHaythem) borderColor = "border-amber-300";
-  if (wasDisputed && !assignedGrant && !assignedHaythem) borderColor = "border-red-300";
-
-  let bgColor = "bg-white";
-  if (assignedGrant) bgColor = "bg-sky-50/50";
-  if (assignedHaythem) bgColor = "bg-amber-50/50";
-  if (wasDisputed && !assignedGrant && !assignedHaythem) bgColor = "bg-red-50/30";
-
-  return (
+  const body = (
     <>
-      <div
-        className={`relative rounded-xl border ${borderColor} ${bgColor} p-3 md:p-4 transition-all duration-500 ease-out ${translateX} cursor-pointer group`}
-        onClick={() => setShowFiles(true)}
-        data-testid={`investment-card-${investment.id}`}
-      >
-        {/* Disputed badge */}
-        {wasDisputed && !assignedGrant && !assignedHaythem && (
-          <div className="absolute -top-2 left-1/2 -translate-x-1/2 px-2.5 py-0.5 bg-red-500 text-white text-[10px] font-bold uppercase tracking-wider rounded-full shadow-sm z-10">
-            Disputed
-          </div>
-        )}
-        {/* Assignment arrows */}
-        <div className="flex items-center gap-2">
-          <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onAssign(investment.id, "Grant");
-              }}
-              disabled={isPending}
-              className={`p-1.5 rounded-lg transition-all ${
-                assignedGrant
-                  ? "bg-sky-500 text-white shadow-sm"
-                  : "bg-gray-100 text-gray-400 hover:bg-sky-100 hover:text-sky-600"
-              }`}
-              data-testid={`assign-grant-${investment.id}`}
-              title="Assign to Grant"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-            </button>
-            <span className="text-[10px] font-semibold text-sky-600">Grant</span>
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-bold text-gray-900 text-sm md:text-base tabular-nums">
-                {formatCurrency(investment.amount)}
-              </span>
-              <div className="flex items-center gap-1.5">
-                <MethodBadge method={investment.method} />
-                {investment.verified === "Verified" ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                ) : (
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                )}
-              </div>
-            </div>
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-xs text-gray-500">
-                {formatDate(investment.date)}
-              </span>
-            </div>
-            {investment.files.length > 0 && (
-              <div className="flex items-center gap-1 mt-1.5">
-                <FileText className="w-3 h-3 text-gray-400" />
-                <span className="text-[11px] text-gray-400">
-                  {investment.files.length} document
-                  {investment.files.length > 1 ? "s" : ""} — click to view
-                </span>
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onAssign(investment.id, "Haythem");
-              }}
-              disabled={isPending}
-              className={`p-1.5 rounded-lg transition-all ${
-                assignedHaythem
-                  ? "bg-amber-500 text-white shadow-sm"
-                  : "bg-gray-100 text-gray-400 hover:bg-amber-100 hover:text-amber-600"
-              }`}
-              data-testid={`assign-haythem-${investment.id}`}
-              title="Assign to Haythem"
-            >
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-            <span className="text-[10px] font-semibold text-amber-600">Haythem</span>
-          </div>
-        </div>
+      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">{label}</p>
+      <div className="mt-2 flex items-end justify-between gap-3">
+        <p className="text-2xl font-black tracking-tight text-slate-950 md:text-3xl">{value}</p>
+        {onClick && <ChevronRight className="mb-1 h-5 w-5 text-slate-400" />}
       </div>
-
-      {showFiles && (
-        <FilesModal
-          investment={investment}
-          onClose={() => setShowFiles(false)}
-        />
-      )}
+      <p className="mt-2 text-sm leading-5 text-slate-600">{detail}</p>
     </>
   );
+  return onClick ? (
+    <button onClick={onClick} className={`w-full rounded-2xl border p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${tones[tone]}`}>{body}</button>
+  ) : (
+    <div className={`rounded-2xl border p-5 shadow-sm ${tones[tone]}`}>{body}</div>
+  );
 }
 
-function MeterGauge({
-  invested,
-  total,
-}: {
-  invested: number;
-  total: number;
-}) {
-  const pct = Math.min((invested / total) * 100, 100);
-  const remaining = total - invested;
+function Status({ value }: { value: string }) {
+  const c = value.toLowerCase().includes("review") || value.toLowerCase().includes("pending")
+    ? "bg-amber-100 text-amber-800"
+    : value.toLowerCase().includes("returned") || value.toLowerCase().includes("closed")
+      ? "bg-sky-100 text-sky-800"
+      : "bg-emerald-100 text-emerald-800";
+  return <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${c}`}>{value}</span>;
+}
 
+function Table({ rows }: { rows: TransactionRow[] }) {
   return (
-    <div className="w-full">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
-          Total Invested
-        </span>
-        <span className="text-sm font-bold tabular-nums text-gray-900">
-          {formatCurrency(invested)} / {formatCurrency(total)}
-        </span>
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
+            <tr>
+              <th className="px-4 py-3">Transaction</th>
+              <th className="px-4 py-3">Recipient / Payee</th>
+              <th className="px-4 py-3">Source</th>
+              <th className="px-4 py-3">Category</th>
+              <th className="px-4 py-3 text-right">Amount</th>
+              <th className="px-4 py-3">Evidence</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((row) => (
+              <tr key={row.id} className="align-top">
+                <td className="px-4 py-4">
+                  <p className="font-mono text-[11px] font-semibold text-slate-700">{row.id}</p>
+                  <p className="mt-1 text-xs text-slate-500">{row.date}</p>
+                </td>
+                <td className="px-4 py-4">
+                  <p className="font-semibold text-slate-900">{row.payee}</p>
+                  <p className="mt-1 max-w-md text-xs leading-5 text-slate-500">{row.description}</p>
+                </td>
+                <td className="px-4 py-4 text-slate-600">{row.source}</td>
+                <td className="px-4 py-4"><p>{row.category}</p><div className="mt-2"><Status value={row.status} /></div></td>
+                <td className="whitespace-nowrap px-4 py-4 text-right font-black tabular-nums">{money(row.amount)}</td>
+                <td className="px-4 py-4 text-xs font-semibold text-slate-600">{row.evidenceCount ? `${row.evidenceCount} on file` : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-      <div className="relative w-full h-5 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
-        <div
-          className="h-full rounded-full transition-all duration-1000 ease-out"
-          style={{
-            width: `${pct}%`,
-            background: "linear-gradient(90deg, #0ea5e9, #14b8a6, #f59e0b)",
-          }}
-        />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-[11px] font-bold text-gray-700 tabular-nums drop-shadow-sm">
-            {pct.toFixed(1)}%
-          </span>
-        </div>
-      </div>
-      {remaining > 0 && (
-        <div className="mt-2 text-center">
-          <span className="text-lg font-bold text-red-600 tabular-nums">
-            {formatCurrency(remaining)} STILL OWED
-          </span>
-        </div>
-      )}
     </div>
   );
+}
+
+const titles: Record<ReportKey, string> = {
+  reconciliation: "Main Account Reconciliation",
+  rmllc: "Rising Management LLC Expense Report",
+  "old-team": "Old Team Pay — Consolidated Report",
+  recoverable: "Recoverable Capital & Loan Report",
+  fees: "Bank Fees & Transfer Costs",
+};
+
+function Report({ report, close }: { report: ReportKey; close: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/55 p-3 backdrop-blur-sm md:p-8" onMouseDown={close}>
+      <div className="mx-auto min-h-[80vh] max-w-6xl overflow-hidden rounded-3xl bg-slate-50 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/95 px-5 py-5 backdrop-blur md:px-8">
+          <div><p className="text-xs font-bold uppercase tracking-[0.2em] text-sky-700">Detailed Report</p><h2 className="mt-1 text-2xl font-black md:text-3xl">{titles[report]}</h2></div>
+          <button onClick={close} className="rounded-xl border border-slate-200 bg-white p-2.5"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="space-y-8 p-5 md:p-8">
+          {report === "reconciliation" && <Reconciliation />}
+          {report === "rmllc" && <RMLLC />}
+          {report === "old-team" && <OldTeam />}
+          {report === "recoverable" && <Recoverable />}
+          {report === "fees" && <Fees />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Reconciliation() {
+  return <>
+    <div className="grid gap-4 md:grid-cols-4">
+      <Card label="Starting Capital" value={money(STARTING_CAPITAL)} detail="Initial capital in the main Chase account." />
+      <Card label="Known Reduction" value={money(KNOWN_NET_REDUCTION)} detail="Known net account activity through the last fully reconciled balance." tone="blue" />
+      <Card label="Last Reconciled Cash" value={money(LAST_RECONCILED_BALANCE)} detail="Bank activity reconciles exactly to this balance." tone="green" />
+      <Card label="Later Activity To Load" value={money(CURRENT_RECONCILIATION_GAP)} detail="Difference between the last reconciled balance and the current reported ~ $50K." tone="amber" />
+    </div>
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      {mainUses.map((item) => <div key={item.label} className="flex flex-col gap-2 border-b border-slate-100 px-5 py-4 last:border-0 md:flex-row md:items-center md:justify-between"><div><p className="font-bold">{item.label}</p><p className="mt-1 max-w-3xl text-sm text-slate-500">{item.description}</p></div><p className="text-lg font-black tabular-nums">{money(item.amount)}</p></div>)}
+      <div className="flex items-center justify-between bg-slate-950 px-5 py-4 text-white"><span className="font-bold">Total known reduction</span><span className="text-xl font-black">{money(KNOWN_NET_REDUCTION)}</span></div>
+    </div>
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-950"><strong>Status:</strong> {money(STARTING_CAPITAL)} − {money(KNOWN_NET_REDUCTION)} = {money(LAST_RECONCILED_BALANCE)}. Current cash has been reported at approximately {money(CURRENT_REPORTED_BALANCE, true)}, leaving {money(CURRENT_RECONCILIATION_GAP)} of later transactions to load.</div>
+  </>;
+}
+
+function RMLLC() {
+  return <>
+    <div className="grid gap-4 md:grid-cols-3">
+      <Card label="RMLLC Funded" value={money(RMLLC_FUNDED)} detail="Top-level transfer from the main account." />
+      <Card label="Accounted For" value={money(RMLLC_ACCOUNTED)} detail="Classified transactions currently in the report." tone="green" />
+      <Card label="Pending / Unexplained" value={money(RMLLC_PENDING_TOTAL)} detail={`${money(RMLLC_PENDING_CAPTURED)} captured but unclassified; ${money(RMLLC_UNALLOCATED)} otherwise unallocated.`} tone="amber" />
+    </div>
+    <section><h3 className="mb-4 text-lg font-black">Accounted transactions</h3><Table rows={rmllcTransactions} /></section>
+    <section><h3 className="mb-4 text-lg font-black">Captured but not yet classified</h3><Table rows={rmllcPendingTransactions} /></section>
+  </>;
+}
+
+function OldTeam() {
+  return <>
+    <div className="grid gap-4 md:grid-cols-3">
+      <Card label="Total Old Team Pay" value={money(OLD_TEAM_TOTAL)} detail="Combined across both funding paths." tone="green" />
+      <Card label="Paid Directly" value={money(OLD_TEAM_DIRECT)} detail="Payments made directly from the main account." />
+      <Card label="Paid Through RMLLC" value={money(OLD_TEAM_RMLLC)} detail="Old team payments included in the RMLLC report." />
+    </div>
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{oldTeamByPerson.map((p) => <div key={p.name} className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-sm font-semibold text-slate-600">{p.name}</p><p className="mt-1 text-xl font-black">{money(p.amount)}</p></div>)}</div>
+    <section><h3 className="mb-4 text-lg font-black">All old team transactions</h3><Table rows={oldTeamTransactions} /></section>
+    <div className="rounded-2xl border border-sky-200 bg-sky-50 p-5 text-sm text-sky-950"><strong>Remaining balance:</strong> not yet calculated because the original total old-team liability has not been supplied.</div>
+  </>;
+}
+
+function Recoverable() {
+  return <>
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950"><strong>Note:</strong> this is an asset / loan view, not another spending total. Some items were funded from RMLLC or redeployed cash, so adding every line to the main-account deployment would double-count capital.</div>
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">{recoverableItems.map((item) => <div key={item.entity} className="grid gap-3 border-b border-slate-100 px-5 py-5 last:border-0 md:grid-cols-[1fr_auto]"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-black">{item.entity}</h3><Status value={item.status} /></div><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{item.note}</p></div><p className="text-xl font-black">{money(item.amount)}</p></div>)}</div>
+  </>;
+}
+
+function Fees() {
+  return <>
+    <div className="grid gap-4 md:grid-cols-3"><Card label="Main Fees" value={money(390)} detail="Explicit fees in the main-account reconciliation." /><Card label="Reversal Shortfall" value={money(45)} detail="$5,500 sent and $5,455 returned; only the $45 shortfall is expense." tone="amber" /><Card label="Consolidated Cost" value={money(CONSOLIDATED_FEES)} detail="Main account plus RMLLC transfer costs." tone="blue" /></div>
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm leading-6 text-slate-700">Consolidated total includes $390 of main-account bank/wire fees, $45 net loss on the failed transfer, and $90 of RMLLC wire fees.</div>
+  </>;
 }
 
 export default function Home() {
-  const { data: investments = [], isLoading } = useQuery<Investment[]>({
-    queryKey: ["/api/investments"],
-  });
-
-  const [disputedIds, setDisputedIds] = useState<Set<string>>(new Set());
-
-  const assignMutation = useMutation({
-    mutationFn: async ({
-      investmentId,
-      assignTo,
-    }: {
-      investmentId: string;
-      assignTo: "Grant" | "Haythem";
-    }) => {
-      const res = await apiRequest("POST", "/api/investments/assign", {
-        investmentId,
-        assignTo,
-      });
-      return res.json();
-    },
-    onSuccess: (data: Investment[], variables) => {
-      queryClient.setQueryData(["/api/investments"], data);
-      // Check if the item became unassigned (disputed)
-      const item = data.find((i: Investment) => i.id === variables.investmentId);
-      if (item && item.assignedTo === null) {
-        setDisputedIds((prev) => new Set(prev).add(variables.investmentId));
-      } else if (item && item.assignedTo !== null) {
-        setDisputedIds((prev) => {
-          const next = new Set(prev);
-          next.delete(variables.investmentId);
-          return next;
-        });
-      }
-    },
-  });
-
-  const handleAssign = (id: string, assignTo: "Grant" | "Haythem") => {
-    assignMutation.mutate({ investmentId: id, assignTo });
-  };
-
-  // Calculate totals
-  const totalInvested = investments.reduce((sum, inv) => sum + inv.amount, 0);
-  const grantAssigned = investments
-    .filter((inv) => inv.assignedTo === "Grant")
-    .reduce((sum, inv) => sum + inv.amount, 0);
-  const haythemAssigned = investments
-    .filter((inv) => inv.assignedTo === "Haythem")
-    .reduce((sum, inv) => sum + inv.amount, 0);
-  const grantOriginal = investments
-    .filter((inv) => inv.investor === "Grant")
-    .reduce((sum, inv) => sum + inv.amount, 0);
-  const haythemOriginal = investments
-    .filter((inv) => inv.investor === "Haythem")
-    .reduce((sum, inv) => sum + inv.amount, 0);
-  const remaining = TOTAL_INVESTMENT - totalInvested;
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-pulse text-gray-400 text-lg">
-          Loading investments...
-        </div>
-      </div>
-    );
-  }
-
+  const [active, setActive] = useState<ReportKey | null>(null);
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-gray-900 flex items-center justify-center">
-                <DollarSign className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-gray-900 leading-tight">
-                  KMJZ Holdings
-                </h1>
-                <p className="text-xs text-gray-500">Investment Tracker</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <Link
-                href="/files"
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-                data-testid="go-to-files"
-              >
-                <FolderOpen className="w-3.5 h-3.5" />
-                Documents
-              </Link>
-              <Link
-                href="/vault"
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-emerald-600 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
-                data-testid="go-to-vault"
-              >
-                <Shield className="w-3.5 h-3.5" />
-                Vault
-              </Link>
-              {remaining > 0 && (
-                <div className="text-right">
-                  <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium">
-                    Outstanding Balance
-                  </p>
-                  <p
-                    className="text-xl font-bold text-red-600 tabular-nums leading-tight"
-                    data-testid="remaining-amount"
-                  >
-                    {formatCurrency(remaining)}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-[#f5f7fa] text-slate-900">
+      <header className="border-b border-slate-200 bg-white"><div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 md:px-8"><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white"><Landmark className="h-5 w-5" /></div><div><p className="text-xs font-bold uppercase tracking-[0.2em] text-sky-700">Capital Transparency</p><h1 className="text-lg font-black md:text-xl">KMJZ Capital Deployment Dashboard</h1></div></div><div className="hidden items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 md:flex"><CheckCircle2 className="h-4 w-4" />Main account reconciled through Sep. 14, 2026</div></div></header>
+      <main className="mx-auto max-w-7xl space-y-8 px-5 py-8 md:px-8 md:py-10">
+        <section className="rounded-3xl bg-slate-950 p-6 text-white shadow-xl md:p-8"><div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-end"><div><div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-slate-200"><ShieldCheck className="h-4 w-4 text-emerald-400" />Viewer-ready reconciliation with drill-down reports</div><h2 className="mt-5 max-w-3xl text-3xl font-black tracking-[-0.04em] md:text-5xl">See where the original {money(STARTING_CAPITAL)} went — and what is still recoverable.</h2><p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">Top-line totals stay simple. Every report opens into transaction-level detail, source account, classification and evidence status.</p></div><button onClick={() => setActive("reconciliation")} className="rounded-2xl border border-white/15 bg-white/10 p-5 text-left transition hover:bg-white/15"><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-300">Known main-account reduction</p><p className="mt-2 text-3xl font-black">{money(KNOWN_NET_REDUCTION)}</p><p className="mt-3 text-xs leading-5 text-slate-300">Click to see the categories that reconcile the bank balance to {money(LAST_RECONCILED_BALANCE)}.</p></button></div></section>
 
-      <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-        {/* Investment Meter */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <MeterGauge invested={totalInvested} total={TOTAL_INVESTMENT} />
-        </div>
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><Card label="Starting Capital" value={money(STARTING_CAPITAL)} detail="Initial capital in the main Chase account." /><Card label="Last Reconciled Cash" value={money(LAST_RECONCILED_BALANCE)} detail="Bank activity reconciles exactly to this balance." tone="green" onClick={() => setActive("reconciliation")} /><Card label="Current Reported Cash" value={money(CURRENT_REPORTED_BALANCE, true)} detail="Current figure is approximate and awaiting later transactions." tone="blue" /><Card label="Later Activity To Reconcile" value={money(CURRENT_RECONCILIATION_GAP)} detail="Transactions after the last reconciled balance still need to be loaded." tone="amber" onClick={() => setActive("reconciliation")} /></section>
 
-        {/* Three-Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr_1fr] gap-4">
-          {/* Grant's Side (Left) */}
-          <div className="bg-white rounded-2xl border border-sky-200 p-4">
-            <div className="text-center mb-4">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-sky-100 mb-2">
-                <span className="text-xl font-bold text-sky-700">G</span>
-              </div>
-              <h2 className="text-base font-bold text-gray-900">Grant</h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Contributed: {formatCurrency(grantOriginal)}
-              </p>
-              <div className="mt-2 py-2 px-3 rounded-xl bg-sky-50 border border-sky-100">
-                <p className="text-[11px] uppercase tracking-wider text-sky-600 font-medium">
-                  Assigned Total
-                </p>
-                <p
-                  className="text-2xl font-bold text-sky-700 tabular-nums"
-                  data-testid="grant-assigned-total"
-                >
-                  {formatCurrency(grantAssigned)}
-                </p>
-              </div>
-            </div>
-            {/* Grant assigned items */}
-            <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-              {investments
-                .filter((inv) => inv.assignedTo === "Grant")
-                .map((inv) => (
-                  <div
-                    key={inv.id}
-                    className="flex items-center justify-between py-2 px-3 rounded-lg bg-sky-50/60 border border-sky-100 text-sm"
-                  >
-                    <span className="text-gray-700 truncate mr-2">
-                      {formatDate(inv.date)}
-                    </span>
-                    <span className="font-semibold text-sky-700 tabular-nums whitespace-nowrap">
-                      {formatCurrency(inv.amount)}
-                    </span>
-                  </div>
-                ))}
-              {investments.filter((inv) => inv.assignedTo === "Grant").length ===
-                0 && (
-                <p className="text-xs text-gray-400 text-center italic py-4">
-                  No investments assigned yet
-                </p>
-              )}
-            </div>
-          </div>
+        <section className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]"><div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6"><div className="flex items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Main account</p><h2 className="mt-1 text-2xl font-black">Where the money was deployed</h2></div><button onClick={() => setActive("reconciliation")} className="text-sm font-bold text-sky-700">Full reconciliation →</button></div><div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">{mainUses.map((item) => <button key={item.label} onClick={() => item.report && setActive(item.report)} className="flex w-full items-center justify-between gap-4 border-b border-slate-100 px-4 py-4 text-left last:border-0 hover:bg-slate-50"><div className="min-w-0"><p className="font-bold">{item.label}</p><p className="mt-1 truncate text-xs text-slate-500">{item.description}</p></div><div className="flex items-center gap-2"><span className="font-black">{money(item.amount)}</span><ChevronRight className="h-4 w-4 text-slate-400" /></div></button>)}</div><div className="mt-4 flex items-center justify-between rounded-2xl bg-slate-950 px-5 py-4 text-white"><span className="font-bold">Known net reduction</span><span className="text-xl font-black">{money(KNOWN_NET_REDUCTION)}</span></div></div><div className="space-y-5"><div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 md:p-6"><div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 text-amber-700" /><div><p className="text-sm font-black text-amber-950">Reconciliation gap</p><p className="mt-1 text-3xl font-black text-amber-950">{money(CURRENT_RECONCILIATION_GAP)}</p><p className="mt-2 text-sm leading-6 text-amber-900">The known transactions reconcile exactly to {money(LAST_RECONCILED_BALANCE)}. Current cash is approximately {money(CURRENT_REPORTED_BALANCE, true)}.</p></div></div></div><div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6"><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Documentation</p><h3 className="mt-1 text-xl font-black">Evidence tied to transaction IDs</h3><p className="mt-2 text-sm leading-6 text-slate-600">Bank screenshots, receipts and verification documents are tracked against the individual transaction ID. Raw banking screenshots are not exposed in this public-facing build.</p><div className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2.5 text-xs font-bold text-emerald-800"><ShieldCheck className="h-4 w-4" />RMLLC-TX-20260903-01 has 2 verification documents on file</div></div></div></section>
 
-          {/* Center - All Investments */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-4">
-            <div className="text-center mb-4">
-              <h2 className="text-base font-bold text-gray-900">
-                All Investments
-              </h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {investments.length} records ·{" "}
-                {formatCurrency(totalInvested)} total
-              </p>
-              <p className="text-[11px] text-gray-400 mt-1">
-                Click ← or → to assign · Click card to view documents
-              </p>
-            </div>
-            <div className="space-y-2 max-h-[calc(100vh-360px)] overflow-y-auto pr-1">
-              {investments.map((inv) => (
-                <InvestmentCard
-                  key={inv.id}
-                  investment={inv}
-                  onAssign={handleAssign}
-                  isPending={assignMutation.isPending}
-                  wasDisputed={disputedIds.has(inv.id)}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Haythem's Side (Right) */}
-          <div className="bg-white rounded-2xl border border-amber-200 p-4">
-            <div className="text-center mb-4">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-100 mb-2">
-                <span className="text-xl font-bold text-amber-700">H</span>
-              </div>
-              <h2 className="text-base font-bold text-gray-900">Haythem</h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Contributed: {formatCurrency(haythemOriginal)}
-              </p>
-              <div className="mt-2 py-2 px-3 rounded-xl bg-amber-50 border border-amber-100">
-                <p className="text-[11px] uppercase tracking-wider text-amber-600 font-medium">
-                  Assigned Total
-                </p>
-                <p
-                  className="text-2xl font-bold text-amber-700 tabular-nums"
-                  data-testid="haythem-assigned-total"
-                >
-                  {formatCurrency(haythemAssigned)}
-                </p>
-              </div>
-            </div>
-            {/* Haythem assigned items */}
-            <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-              {investments
-                .filter((inv) => inv.assignedTo === "Haythem")
-                .map((inv) => (
-                  <div
-                    key={inv.id}
-                    className="flex items-center justify-between py-2 px-3 rounded-lg bg-amber-50/60 border border-amber-100 text-sm"
-                  >
-                    <span className="text-gray-700 truncate mr-2">
-                      {formatDate(inv.date)}
-                    </span>
-                    <span className="font-semibold text-amber-700 tabular-nums whitespace-nowrap">
-                      {formatCurrency(inv.amount)}
-                    </span>
-                  </div>
-                ))}
-              {investments.filter((inv) => inv.assignedTo === "Haythem")
-                .length === 0 && (
-                <p className="text-xs text-gray-400 text-center italic py-4">
-                  No investments assigned yet
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
+        <section><div className="mb-4"><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Explore reports</p><h2 className="mt-1 text-2xl font-black">Click a total for the detail behind it</h2></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><Card label="RMLLC Accounted" value={money(RMLLC_ACCOUNTED)} detail={`${money(RMLLC_PENDING_TOTAL)} of the $25,000 allocation remains pending or unexplained.`} tone="blue" onClick={() => setActive("rmllc")} /><Card label="Old Team Pay" value={money(OLD_TEAM_TOTAL)} detail={`${money(OLD_TEAM_DIRECT)} direct + ${money(OLD_TEAM_RMLLC)} through RMLLC.`} tone="green" onClick={() => setActive("old-team")} /><Card label="BTC Recoverable Capital" value={money(64_790)} detail="Known loans to BTC, including DE.CON supplies and equipment." onClick={() => setActive("recoverable")} /><Card label="Bank / Transfer Costs" value={money(CONSOLIDATED_FEES)} detail="Consolidated across the main account and RMLLC." tone="amber" onClick={() => setActive("fees")} /></div></section>
       </main>
-
-      {/* Footer */}
-      <footer className="text-center py-4 mt-8 border-t border-gray-100">
-        <a
-          href="https://www.perplexity.ai/computer"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-gray-400 hover:text-gray-500 transition-colors"
-        >
-          Created with Perplexity Computer
-        </a>
-      </footer>
+      {active && <Report report={active} close={() => setActive(null)} />}
     </div>
   );
 }
