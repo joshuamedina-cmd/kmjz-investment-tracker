@@ -5,14 +5,14 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
-import Home from "@/pages/home";
+import CapitalHome from "@/pages/capital-home";
 import Files from "@/pages/files";
 import Vault from "@/pages/vault";
 
 function AppRouter() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
+      <Route path="/" component={CapitalHome} />
       <Route path="/files" component={Files} />
       <Route path="/vault" component={Vault} />
       <Route component={NotFound} />
