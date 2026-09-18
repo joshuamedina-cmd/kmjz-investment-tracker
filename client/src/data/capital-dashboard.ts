@@ -11,7 +11,7 @@ export const JOSHUA_FROM_RMLLC=RMLLC_TO_JOSHUA;
 export const JOSHUA_FROM_ACCOUNT_NOW=JOSHUA_LOAN_TOTAL-JOSHUA_FROM_CASH_DRAW-JOSHUA_FROM_RMLLC;
 export const CASH_AFTER_JOSHUA_LOAN=LAST_RECONCILED_BALANCE-JOSHUA_FROM_ACCOUNT_NOW;
 export const NEW_BTC_LOAN=1_700.58;
-export const CURRENT_RECONCILED_BALANCE=CASH_AFTER_JOSHUA_LOAN-NEW_BTC_LOAN;
+export const CURRENT_RECONCILED_BALANCE=CASH_AFTER_JOSHUA_LOAN-NEW_BTC_LOAN-250;
 export const DECON_REPAYMENT=6_250;
 export const BTC_REPAYMENT=52_700.58;
 export const LIFTED_REPAYMENT=6_250;
@@ -19,7 +19,7 @@ export const HELICOPTER_SHOT_REPAYMENT=10_000;
 export const LISTED_REPAYMENTS_TOTAL=DECON_REPAYMENT+BTC_REPAYMENT+LIFTED_REPAYMENT+HELICOPTER_SHOT_REPAYMENT;
 export const BALANCE_PLUS_LISTED_REPAYMENTS=LAST_RECONCILED_BALANCE+LISTED_REPAYMENTS_TOTAL;
 export const PROJECTED_CASH_AFTER_REPAYMENTS=CURRENT_RECONCILED_BALANCE+LISTED_REPAYMENTS_TOTAL;
-export const OLD_TEAM_DIRECT=4_694;
+export const OLD_TEAM_DIRECT=4_944;
 export const OLD_TEAM_RMLLC=6_000;
 export const OLD_TEAM_TOTAL=OLD_TEAM_DIRECT+OLD_TEAM_RMLLC;
 export const RMLLC_FEES=90;
@@ -40,12 +40,13 @@ export const mainUses=[
  {label:"HSLLC capital deployed",amount:16_250,report:"recoverable" as ReportKey,description:"$10,000 wholesale product loan plus $6,250 Lifted Industries deal #1."},
  {label:"MZA loan",amount:15_000,report:"recoverable" as ReportKey,description:"Confirmed payment toward Muhammad Ziyad Akhtar's stated $17,500 loan."},
  {label:"Cash withdrawal allocation",amount:13_000,report:"joshua-loan" as ReportKey,description:"$7,000 to MAI loan, $3,500 Tesla down payment, $2,500 to Joshua loan."},
- {label:"Old team pay — direct",amount:4_694,report:"old-team" as ReportKey,description:"Direct old team payments; additional old team pay was made through RMLLC."},
+ {label:"Old team pay — direct",amount:4_944,report:"old-team" as ReportKey,description:"Direct old team payments, including the Sep 18 $250 payment to Shela The Cleaner; additional old team pay was made through RMLLC."},
  {label:"Bank & transfer costs",amount:435,report:"fees" as ReportKey,description:"$390 explicit main-account fees plus $45 reversed-transfer shortfall."},
  {label:"Joshua loan completion — new",amount:JOSHUA_FROM_ACCOUNT_NOW,report:"joshua-loan" as ReportKey,description:"Remaining amount treated as gone from the main account now to complete Joshua's $17,500 loan."},
 ];
 
 export const oldTeamTransactions:TransactionRow[]=[
+{id:"MAIN-TX-20260918-OT-SHELA",date:"Sep 18, 2026",source:"Main Chase",payee:"Shela The Cleaner",amount:250,category:"Old Team Pay",description:"Zelle payment marked old team; transaction number 30871071659.",status:"Accounted",evidenceCount:1},
 {id:"MAIN-TX-20260903-OT01",date:"Sep 3, 2026",source:"Main Chase",payee:"Samantha Garcia",amount:2394,category:"Old Team Pay",description:"Direct old team payment.",status:"Accounted",evidenceCount:1},
 {id:"MAIN-TX-20260903-OT02",date:"Sep 3, 2026",source:"Main Chase",payee:"Jaime DeLuna",amount:1000,category:"Old Team Pay",description:"Direct old team payment.",status:"Accounted",evidenceCount:1},
 {id:"MAIN-TX-20260908-OT01",date:"Sep 8, 2026",source:"Main Chase",payee:"Jorge",amount:1000,category:"Old Team Pay",description:"Direct old team payment.",status:"Accounted",evidenceCount:1},
