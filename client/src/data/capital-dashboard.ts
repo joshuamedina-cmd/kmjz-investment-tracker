@@ -10,13 +10,15 @@ export const JOSHUA_FROM_CASH_DRAW=2_500;
 export const JOSHUA_FROM_RMLLC=RMLLC_TO_JOSHUA;
 export const JOSHUA_FROM_ACCOUNT_NOW=JOSHUA_LOAN_TOTAL-JOSHUA_FROM_CASH_DRAW-JOSHUA_FROM_RMLLC;
 export const CASH_AFTER_JOSHUA_LOAN=LAST_RECONCILED_BALANCE-JOSHUA_FROM_ACCOUNT_NOW;
+export const NEW_BTC_LOAN=1_700.58;
+export const CURRENT_RECONCILED_BALANCE=CASH_AFTER_JOSHUA_LOAN-NEW_BTC_LOAN;
 export const DECON_REPAYMENT=6_250;
-export const BTC_REPAYMENT=51_000;
+export const BTC_REPAYMENT=52_700.58;
 export const LIFTED_REPAYMENT=6_250;
 export const HELICOPTER_SHOT_REPAYMENT=10_000;
 export const LISTED_REPAYMENTS_TOTAL=DECON_REPAYMENT+BTC_REPAYMENT+LIFTED_REPAYMENT+HELICOPTER_SHOT_REPAYMENT;
 export const BALANCE_PLUS_LISTED_REPAYMENTS=LAST_RECONCILED_BALANCE+LISTED_REPAYMENTS_TOTAL;
-export const PROJECTED_CASH_AFTER_REPAYMENTS=CASH_AFTER_JOSHUA_LOAN+LISTED_REPAYMENTS_TOTAL;
+export const PROJECTED_CASH_AFTER_REPAYMENTS=CURRENT_RECONCILED_BALANCE+LISTED_REPAYMENTS_TOTAL;
 export const OLD_TEAM_DIRECT=4_694;
 export const OLD_TEAM_RMLLC=6_000;
 export const OLD_TEAM_TOTAL=OLD_TEAM_DIRECT+OLD_TEAM_RMLLC;
@@ -26,14 +28,14 @@ export const FAILED_TRANSFER_SHORTFALL=45;
 export const CONSOLIDATED_FEES=RMLLC_FEES+MAIN_FEES+FAILED_TRANSFER_SHORTFALL;
 
 export const repaymentItems=[
- {entity:"BTC repayment",amount:BTC_REPAYMENT,note:"Brothers Trading Company LLC capital expected back."},
+ {entity:"BTC repayment",amount:BTC_REPAYMENT,note:"Brothers Trading Company LLC capital expected back, including the $1,700.58 Kristal Graphics packaging invoice paid Sep 18, 2026."},
  {entity:"DE.CON project repayment",amount:DECON_REPAYMENT,note:"Latest amount specified for the DE.CON project repayment pool."},
  {entity:"Lifted Industries #1",amount:LIFTED_REPAYMENT,note:"Original $6,250 capital from the Lifted Industries deal."},
  {entity:"Helicopter Shot LLC",amount:HELICOPTER_SHOT_REPAYMENT,note:"Bulk wholesale product loan expected back."},
 ] as const;
 
 export const mainUses=[
- {label:"BTC loans / investments",amount:64_790,report:"recoverable" as ReportKey,description:"Recoverable capital deployed to Brothers Trading Company LLC."},
+ {label:"BTC loans / investments",amount:66_490.58,report:"recoverable" as ReportKey,description:"Recoverable capital deployed to Brothers Trading Company LLC, including the new $1,700.58 Kristal Graphics packaging loan."},
  {label:"Rising Management allocation",amount:25_000,report:"rmllc" as ReportKey,description:"$18,442.85 documented RMLLC activity plus $6,557.15 assigned to Joshua's loan."},
  {label:"HSLLC capital deployed",amount:16_250,report:"recoverable" as ReportKey,description:"$10,000 wholesale product loan plus $6,250 Lifted Industries deal #1."},
  {label:"MZA loan",amount:15_000,report:"recoverable" as ReportKey,description:"Confirmed payment toward Muhammad Ziyad Akhtar's stated $17,500 loan."},
@@ -85,7 +87,7 @@ export const rmllcTransactions:TransactionRow[]=[
 ];
 
 export const recoverableItems=[
-{entity:"Brothers Trading Company LLC (BTC)",amount:64_790,status:"Outstanding",note:"Underlying BTC and DE.CON lending."},
+{entity:"Brothers Trading Company LLC (BTC)",amount:66_490.58,status:"Outstanding",note:"Underlying BTC and DE.CON lending plus MAIN-TX-20260918-BTC-KRISTAL: $1,700.58 paid to Kristal Graphics for BTC packaging (Invoice #97094)."},
 {entity:"Helicopter Shot LLC — wholesale product",amount:10_000,status:"Outstanding",note:"Bulk product for wholesale."},
 {entity:"Lifted Industries #1 / HSLLC",amount:6_250,status:"Returned / Closed",note:"$6,250 deployed; $8,800 cash returned."},
 {entity:"Muhammad Ziyad Akhtar (MZA)",amount:15_000,status:"Toward $17,500 stated loan",note:"Confirmed loan principal."},
@@ -97,4 +99,8 @@ export const joshuaLoanTransactions:TransactionRow[]=[
 {id:"MAIN-CASH-20260908-JOSHUA",date:"Sep 8, 2026",source:"Cash / Redeployed",payee:"Joshua",amount:JOSHUA_FROM_CASH_DRAW,category:"Joshua Loan",description:"Portion of $13,000 cash withdrawal.",status:"Accounted"},
 {id:"RMLLC-ALLOC-20260916-JOSHUA",date:"Sep 16, 2026",source:"RMLLC",payee:"Joshua",amount:JOSHUA_FROM_RMLLC,category:"Joshua Loan",description:"Remaining RMLLC funds assigned to Joshua's loan.",status:"Accounted"},
 {id:"MAIN-TX-20260916-JOSHUA",date:"Sep 16, 2026",source:"Main Chase",payee:"Joshua",amount:JOSHUA_FROM_ACCOUNT_NOW,category:"Joshua Loan",description:"Amount taken from account now to complete the full $17,500 loan.",status:"Accounted"},
+];
+
+export const btcTransactions:TransactionRow[]=[
+{id:"MAIN-TX-20260918-BTC-KRISTAL",date:"Sep 18, 2026",source:"Main Chase",payee:"S&M Ltd LLC DBA Kristal Graphics",amount:NEW_BTC_LOAN,category:"BTC Loan / Packaging",description:"Paid on behalf of Brothers Trading Company LLC for Invoice #97094: 600 printed boxes with inserts across 3 SKUs, including card fee and tax. Treated as an additional recoverable loan to BTC.",status:"Accounted",evidenceCount:1},
 ];
