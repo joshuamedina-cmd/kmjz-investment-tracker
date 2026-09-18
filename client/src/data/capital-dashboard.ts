@@ -3,7 +3,7 @@ export interface TransactionRow { id:string; date:string; source:"Main Chase"|"R
 export const STARTING_CAPITAL=205_920;
 export const LAST_RECONCILED_BALANCE=66_751;
 export const RMLLC_FUNDED=25_000;
-export const RMLLC_ACCOUNTED=17_942.85;
+export const RMLLC_ACCOUNTED=18_442.85;
 export const RMLLC_TO_JOSHUA=RMLLC_FUNDED-RMLLC_ACCOUNTED;
 export const JOSHUA_LOAN_TOTAL=17_500;
 export const JOSHUA_FROM_CASH_DRAW=2_500;
@@ -34,7 +34,7 @@ export const repaymentItems=[
 
 export const mainUses=[
  {label:"BTC loans / investments",amount:64_790,report:"recoverable" as ReportKey,description:"Recoverable capital deployed to Brothers Trading Company LLC."},
- {label:"Rising Management allocation",amount:25_000,report:"rmllc" as ReportKey,description:"$17,942.85 documented RMLLC activity plus $7,057.15 assigned to Joshua's loan."},
+ {label:"Rising Management allocation",amount:25_000,report:"rmllc" as ReportKey,description:"$18,442.85 documented RMLLC activity plus $6,557.15 assigned to Joshua's loan."},
  {label:"HSLLC capital deployed",amount:16_250,report:"recoverable" as ReportKey,description:"$10,000 wholesale product loan plus $6,250 Lifted Industries deal #1."},
  {label:"MZA loan",amount:15_000,report:"recoverable" as ReportKey,description:"Confirmed payment toward Muhammad Ziyad Akhtar's stated $17,500 loan."},
  {label:"Cash withdrawal allocation",amount:13_000,report:"joshua-loan" as ReportKey,description:"$7,000 to MAI loan, $3,500 Tesla down payment, $2,500 to Joshua loan."},
@@ -77,6 +77,10 @@ export const rmllcTransactions:TransactionRow[]=[
 {id:"RMLLC-TX-20260831-05",date:"Aug 31, 2026",source:"RMLLC",payee:"Test Man Man",amount:340,category:"KMJZ Company Bill",description:"Testosterone for the guys; KMJZ bill.",status:"Accounted",evidenceCount:1},
 {id:"RMLLC-TX-20260901-01",date:"Sep 1, 2026",source:"RMLLC",payee:"InfiniteLoop",amount:1400,category:"MAI Loan Application",description:"Two units of flower; ultimately applied toward MAI's stated $17,500 loan.",status:"Accounted",evidenceCount:1},
 {id:"RMLLC-TX-20260903-01",date:"Sep 3, 2026",source:"RMLLC",payee:"Mohammad Akhtar Imad (MAI)",amount:2500,category:"MAI Loan Application",description:"Payment applied toward MAI's stated $17,500 loan. BOA funded $2,498.95 and Apple Cash funded $1.05.",status:"Accounted",evidenceCount:2},
+{id:"RMLLC-TX-20260807-BADROTO",date:"Aug 7, 2026",source:"RMLLC",payee:"Bad Roto",amount:100,category:"Roto Equipment Payment",description:"Payment to the roto guy who originally sold us the roto.",status:"Accounted",evidenceCount:1},
+{id:"RMLLC-TX-20260825-BADROTO",date:"Aug 25, 2026",source:"RMLLC",payee:"Bad Roto",amount:150,category:"Roto Equipment Payment",description:"Payment to the roto guy who originally sold us the roto.",status:"Accounted",evidenceCount:1},
+{id:"RMLLC-TX-20260904-BADROTO",date:"Sep 4, 2026",source:"RMLLC",payee:"Bad Roto",amount:100,category:"Roto Equipment Payment",description:"Payment to the roto guy who originally sold us the roto.",status:"Accounted",evidenceCount:1},
+{id:"RMLLC-TX-20260916-BADROTO",date:"Sep 16, 2026",source:"RMLLC",payee:"Bad Roto",amount:150,category:"Roto Equipment Payment",description:"Payment to the roto guy who originally sold us the roto.",status:"Accounted",evidenceCount:1},
 {id:"RMLLC-ALLOC-20260916-JOSHUA",date:"Sep 16, 2026",source:"RMLLC",payee:"Joshua",amount:RMLLC_TO_JOSHUA,category:"Joshua Loan",description:"Remaining RMLLC funds assigned toward Joshua's $17,500 loan.",status:"Accounted"},
 ];
 
@@ -86,7 +90,7 @@ export const recoverableItems=[
 {entity:"Lifted Industries #1 / HSLLC",amount:6_250,status:"Returned / Closed",note:"$6,250 deployed; $8,800 cash returned."},
 {entity:"Muhammad Ziyad Akhtar (MZA)",amount:15_000,status:"Toward $17,500 stated loan",note:"Confirmed loan principal."},
 {entity:"Mohammad Akhtar Imad (MAI)",amount:18_100,status:"Review",note:"Recorded applications total $18,100, $600 above stated $17,500; flagged for reconciliation."},
-{entity:"Joshua loan",amount:JOSHUA_LOAN_TOTAL,status:"Fully Allocated",note:"$2,500 cash draw + $7,057.15 RMLLC remainder + $7,942.85 taken from the main account now."},
+{entity:"Joshua loan",amount:JOSHUA_LOAN_TOTAL,status:"Fully Allocated",note:"$2,500 cash draw + $6,557.15 RMLLC remainder + $8,442.85 taken from the main account now."},
 ] as const;
 
 export const joshuaLoanTransactions:TransactionRow[]=[
